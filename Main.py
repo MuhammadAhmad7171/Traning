@@ -8,7 +8,7 @@ from torch.utils.data import DistributedSampler
 
 from Multi_Gpu import setup_distributed_training, setup_multi_gpu
 from Model_CheckPoints import save_checkpoint
-from Dataloader_Augmentation import load_data
+from DataLoader_Augmentation import load_data
 from Training_Logs import setup_logger
 
 def compute_accuracy(outputs, labels, top_k=(1,)):
