@@ -30,13 +30,15 @@ def accuracy(output, target, topk=(1, 5)):
         return [correct[:k].reshape(-1).float().sum(0, keepdim=True) * 100.0 / batch_size for k in topk]
 
 # Main Training Function
+# Main Training Function
 def main():
     args = parse_args()
     
     # Initialize Distributed Training
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # Use both GPUs on Kaggle
-    setup_distributed_training()
     rank = dist.get_rank()
+    world_size = args.world_size  # Number of nodes for distributed training
+    setup_distributed_training(rank, world_size)  # Pass rank and world_size here
     
     # Directories
     log_dir = "./logs"
@@ -105,6 +107,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 # Run training with multi-GPU on Kaggle
 # torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20 --resume ./checkpoints/best_model.pth
