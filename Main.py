@@ -1,12 +1,13 @@
 import torch
 import torch.optim as optim
 from torchvision import models
-from Training_logs import setup_logger
-from Model_CheckPoints import save_checkpoint, load_checkpoint
-from Multi_Gpu import setup_distributed_training
-from DataLoader_Augmentation import load_data
+from train_log import setup_logger
+from checkpoint import save_checkpoint, load_checkpoint
+from multi_gpu import setup_distributed_training
+from data_loader import load_data
 import torch.distributed as dist
 import argparse
+import os
 
 # Argument Parser for Configurations
 def parse_args():
@@ -33,6 +34,7 @@ def main():
     args = parse_args()
     
     # Initialize Distributed Training
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # Use both GPUs on Kaggle
     setup_distributed_training()
     rank = dist.get_rank()
     
@@ -103,3 +105,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Run training with multi-GPU on Kaggle
+# torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20
