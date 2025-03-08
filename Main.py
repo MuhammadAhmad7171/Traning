@@ -39,9 +39,11 @@ def main():
 
     # Load dataset
     train_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train"
-    test_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train"
+    test_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/test"  # Fix: Use the correct test directory
     batch_size = 32
-    train_loader, test_loader = load_data(train_dir, test_dir, batch_size)
+    
+    # Load data with distributed sampler
+    train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=True)
 
     # Load model and wrap with DDP
     model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
@@ -57,20 +59,19 @@ def main():
 
     # Training loop
     num_epochs = 5
-    train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=True)
 
-# Training loop
     for epoch in range(num_epochs):
         model.train()
-    
+        
+        # Set epoch for DistributedSampler
         if train_sampler:
-            train_sampler.set_epoch(epoch)  
-            
+            train_sampler.set_epoch(epoch)
+        
         running_loss, correct_top1, correct_top5, total_samples = 0.0, 0, 0, 0
         
         for images, labels in train_loader:
             images, labels = images.to(rank), labels.to(rank)
-
+            
             optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
