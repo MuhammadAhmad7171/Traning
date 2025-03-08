@@ -1,10 +1,10 @@
 import torch
 import torch.optim as optim
 from torchvision import models
-from train_log import setup_logger
-from checkpoint import save_checkpoint, load_checkpoint
+from Training_logs import setup_logger
+from Model_CheckPoints import save_checkpoint, load_checkpoint
 from Multi_Gpu import setup_distributed_training
-from data_loader import load_data
+from DataLoader_Augmentation import load_data
 import torch.distributed as dist
 import argparse
 
@@ -18,6 +18,16 @@ def parse_args():
     parser.add_argument('--world_size', type=int, default=2, help='Number of nodes for distributed training')
     return parser.parse_args()
 
+# Compute Top-1 and Top-5 Accuracy
+def accuracy(output, target, topk=(1, 5)):
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+        return [correct[:k].reshape(-1).float().sum(0, keepdim=True) * 100.0 / batch_size for k in topk]
+
 # Main Training Function
 def main():
     args = parse_args()
@@ -29,14 +39,15 @@ def main():
     # Directories
     log_dir = "./logs"
     checkpoint_dir = "./checkpoints"
-    train_dir = "./data/train"
-    test_dir = "./data/test"
+    train_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train"
+    test_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/test"
     
     if rank == 0:
         logger = setup_logger(log_dir)
     
     # Model Setup
-    model = models.vit_b_16(pretrained=True)  # Example ViT model
+    model = models.vit_b_16(pretrained=True)  # Pretrained ViT model
+    model.heads.head = torch.nn.Linear(model.heads.head.in_features, 5)  # Adjust output for 5 classes
     model.cuda()
     model = torch.nn.parallel.DistributedDataParallel(model)
     
@@ -56,6 +67,8 @@ def main():
     for epoch in range(start_epoch, args.epochs):
         model.train()
         running_loss = 0.0
+        top1_acc_total, top5_acc_total = 0.0, 0.0
+        total_samples = 0
         
         for inputs, labels in train_loader:
             inputs, labels = inputs.cuda(), labels.cuda()
@@ -67,9 +80,18 @@ def main():
             optimizer.step()
             
             running_loss += loss.item()
+            
+            # Compute Top-1 and Top-5 Accuracy
+            top1, top5 = accuracy(outputs, labels)
+            top1_acc_total += top1.item()
+            top5_acc_total += top5.item()
+            total_samples += 1
+        
+        avg_top1_acc = top1_acc_total / total_samples
+        avg_top5_acc = top5_acc_total / total_samples
         
         if rank == 0:
-            logger.info(f"Epoch {epoch}, Loss: {running_loss/len(train_loader)}")
+            logger.info(f"Epoch {epoch}, Loss: {running_loss/len(train_loader)}, Top-1 Acc: {avg_top1_acc:.2f}%, Top-5 Acc: {avg_top5_acc:.2f}%")
         
         # Save checkpoint after each epoch
         if rank == 0:
