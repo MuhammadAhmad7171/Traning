@@ -1,13 +1,13 @@
 import torch
 import torch.optim as optim
+import torch.distributed as dist
+import os
+import argparse
 from torchvision import models
 from Training_logs import setup_logger
 from Model_CheckPoints import save_checkpoint, load_checkpoint
 from Multi_Gpu import setup_distributed_training
 from DataLoader_Augmentation import load_data
-import torch.distributed as dist
-import argparse
-import os
 
 # Argument Parser for Configurations
 def parse_args():
@@ -30,39 +30,37 @@ def accuracy(output, target, topk=(1, 5)):
         return [correct[:k].reshape(-1).float().sum(0, keepdim=True) * 100.0 / batch_size for k in topk]
 
 # Main Training Function
-# Main Training Function
 def main():
     args = parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # Use GPUs
+    
+    # Get rank and world_size from environment
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
     
     # Initialize Distributed Training
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # Use both GPUs on Kaggle
-    rank = dist.get_rank()
-    world_size = args.world_size  # Number of nodes for distributed training
-    setup_distributed_training(rank, world_size)  # Pass rank and world_size here
-    
-    # Directories
-    log_dir = "./logs"
-    checkpoint_dir = "./checkpoints"
-    train_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train"
-    test_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/test"
+    setup_distributed_training(rank, world_size)
+    torch.cuda.set_device(rank)
     
     if rank == 0:
-        logger = setup_logger(log_dir)
+        logger = setup_logger("./logs")
     
     # Model Setup
-    model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)  # Pretrained ViT model
-    model.heads.head = torch.nn.Linear(model.heads.head.in_features, 5)  # Adjust output for 5 classes
-    model.cuda()
+    model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)
+    model.heads.head = torch.nn.Linear(model.heads.head.in_features, 5)
+    model.cuda(rank)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     
     # Data Loaders
-    train_loader, test_loader = load_data(train_dir, test_dir, args.batch_size)
+    train_loader, test_loader = load_data("/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train", 
+                                          "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/test", 
+                                          args.batch_size)
     
     # Optimizer and Loss
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.CrossEntropyLoss()
     
-    # Load Checkpoint if Resume Training
+    # Load Checkpoint if Resuming Training
     start_epoch = 0
     if args.resume:
         model, optimizer, start_epoch, _ = load_checkpoint(model, optimizer, args.resume)
@@ -70,13 +68,10 @@ def main():
     # Training Loop
     for epoch in range(start_epoch, args.epochs):
         model.train()
-        running_loss = 0.0
-        top1_acc_total, top5_acc_total = 0.0, 0.0
-        total_samples = 0
+        running_loss, top1_acc_total, top5_acc_total, total_samples = 0.0, 0.0, 0.0, 0
         
         for inputs, labels in train_loader:
-            inputs, labels = inputs.cuda(), labels.cuda()
-            
+            inputs, labels = inputs.cuda(rank), labels.cuda(rank)
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -84,8 +79,6 @@ def main():
             optimizer.step()
             
             running_loss += loss.item()
-            
-            # Compute Top-1 and Top-5 Accuracy
             top1, top5 = accuracy(outputs, labels)
             top1_acc_total += top1.item()
             top5_acc_total += top5.item()
@@ -99,15 +92,13 @@ def main():
         
         # Save checkpoint after each epoch
         if rank == 0:
-            save_checkpoint(model, optimizer, epoch, running_loss, is_best=False, checkpoint_dir=checkpoint_dir)
+            save_checkpoint(model, optimizer, epoch, running_loss, is_best=False, checkpoint_dir="./checkpoints")
     
     # Save final model
     if rank == 0:
-        save_checkpoint(model, optimizer, epoch, running_loss, is_best=True, checkpoint_dir=checkpoint_dir)
+        save_checkpoint(model, optimizer, epoch, running_loss, is_best=True, checkpoint_dir="./checkpoints")
+    
+    dist.destroy_process_group()
 
 if __name__ == "__main__":
     main()
-
-
-# Run training with multi-GPU on Kaggle
-# torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20 --resume ./checkpoints/best_model.pth
