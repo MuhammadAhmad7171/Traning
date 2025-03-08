@@ -28,9 +28,16 @@ def compute_accuracy(outputs, labels, top_k=(1,)):
 
 def main():
     # Distributed setup
-    rank = int(os.environ["RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-    setup_distributed_training(rank, world_size)
+    available_gpus = torch.cuda.device_count()
+    world_size = available_gpus  # Use all available GPUs
+    rank = int(os.environ.get("RANK", 0))  # Default to 0 if RANK is not set
+    
+    # If only 1 GPU is available, disable distributed training
+    if world_size == 1:
+        print("Running in single-GPU mode (no distributed training)")
+        torch.cuda.set_device(0)
+    else:
+        setup_distributed_training(rank, world_size)
     
     # Logging
     log_dir = "./logs"
@@ -43,7 +50,7 @@ def main():
     batch_size = 32
     
     # Load data with distributed sampler
-    train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=True)
+    train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=(world_size > 1))
 
     # Model initialization
     model = models.vit_b_16(weights=None)  # Initialize model without weights
@@ -54,7 +61,8 @@ def main():
         torch.save(model.state_dict(), "vit_b_16_weights.pth")
     
     # Synchronize all processes to ensure rank 0 finishes downloading
-    dist.barrier()
+    if world_size > 1:
+        dist.barrier()
 
     # All ranks load the weights from the file
     if rank != 0:
@@ -145,7 +153,8 @@ def main():
             save_checkpoint(model, optimizer, epoch, val_loss, is_best=True, checkpoint_dir=checkpoint_dir)
 
     # Cleanup
-    dist.destroy_process_group()
+    if world_size > 1:
+        dist.destroy_process_group()
 
 if __name__ == "__main__":
     main()
