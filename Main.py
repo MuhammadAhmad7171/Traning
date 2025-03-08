@@ -57,9 +57,15 @@ def main():
 
     # Training loop
     num_epochs = 5
+    train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=True)
+
+# Training loop
     for epoch in range(num_epochs):
         model.train()
-        train_loader.sampler.set_epoch(epoch)  # Ensure correct shuffling across GPUs
+    
+        if train_sampler:
+            train_sampler.set_epoch(epoch)  
+            
         running_loss, correct_top1, correct_top5, total_samples = 0.0, 0, 0, 0
         
         for images, labels in train_loader:
