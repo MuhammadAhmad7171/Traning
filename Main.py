@@ -6,10 +6,10 @@ import torch.distributed as dist
 import torchvision.models as models
 from torch.utils.data import DistributedSampler
 
-from multigpu import setup_distributed_training, setup_multi_gpu
-from modelcheckpionts import save_checkpoint
-from dataloader_augmentation import load_data
-from traininglogs import setup_logger
+from Multi_Gpu import setup_distributed_training, setup_multi_gpu
+from Model_CheckPionts import save_checkpoint
+from Dataloader_Augmentation import load_data
+from Training_Logs import setup_logger
 
 def compute_accuracy(outputs, labels, top_k=(1,)):
     """Compute top-k accuracy"""
