@@ -38,8 +38,8 @@ def main():
     logger = setup_logger(log_dir)
 
     # Load dataset
-    train_dir = "./data/train"
-    test_dir = "./data/test"
+    train_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train"
+    test_dir = "/kaggle/input/alzheimer-5-class/Alzheimer 5 classes/train"
     batch_size = 32
     train_loader, test_loader = load_data(train_dir, test_dir, batch_size)
 
