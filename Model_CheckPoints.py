@@ -1,13 +1,15 @@
 import torch
 
-def save_checkpoint(model, optimizer, epoch, loss, is_best, checkpoint_dir):
+def save_checkpoint(model, optimizer, epoch, running_loss, is_best, checkpoint_dir="./checkpoints"):
+    os.makedirs(checkpoint_dir, exist_ok=True)  # Ensure directory exists
+    
+    filename = f"{checkpoint_dir}/checkpoint_epoch_{epoch}.pth"
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss
+        'loss': running_loss
     }
-    filename = f"{checkpoint_dir}/checkpoint_epoch_{epoch}.pth"
     torch.save(checkpoint, filename)
     
     if is_best:
