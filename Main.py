@@ -45,17 +45,20 @@ def main():
     # Load data with distributed sampler
     train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=True)
 
-    # Load model and wrap with DDP
-    if rank == 0:
-        # Only rank 0 downloads the weights
-        model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
-    else:
-        # Other ranks wait for rank 0 to download the weights
-        dist.barrier()
-        model = models.vit_b_16(weights=None)  # Initialize model without weights
+    # Model initialization
+    model = models.vit_b_16(weights=None)  # Initialize model without weights
 
-    # Synchronize all processes to ensure weights are downloaded and cached
+    # Rank 0 downloads the weights and saves them to a file
+    if rank == 0:
+        model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
+        torch.save(model.state_dict(), "vit_b_16_weights.pth")
+    
+    # Synchronize all processes to ensure rank 0 finishes downloading
     dist.barrier()
+
+    # All ranks load the weights from the file
+    if rank != 0:
+        model.load_state_dict(torch.load("vit_b_16_weights.pth", map_location=f"cuda:{rank}"))
 
     # Move model to the correct device and wrap with DDP
     model.to(rank)
