@@ -48,10 +48,10 @@ def main():
         logger = setup_logger(log_dir)
     
     # Model Setup
-    model = models.vit_b_16(pretrained=True)  # Pretrained ViT model
+    model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)  # Pretrained ViT model
     model.heads.head = torch.nn.Linear(model.heads.head.in_features, 5)  # Adjust output for 5 classes
     model.cuda()
-    model = torch.nn.parallel.DistributedDataParallel(model)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     
     # Data Loaders
     train_loader, test_loader = load_data(train_dir, test_dir, args.batch_size)
@@ -107,4 +107,4 @@ if __name__ == "__main__":
     main()
 
 # Run training with multi-GPU on Kaggle
-#torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20 --resume ./checkpoints/best_model.pth
+# torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20 --resume ./checkpoints/best_model.pth
