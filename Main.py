@@ -46,7 +46,18 @@ def main():
     train_loader, test_loader, train_sampler = load_data(train_dir, test_dir, batch_size, distributed=True)
 
     # Load model and wrap with DDP
-    model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
+    if rank == 0:
+        # Only rank 0 downloads the weights
+        model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
+    else:
+        # Other ranks wait for rank 0 to download the weights
+        dist.barrier()
+        model = models.vit_b_16(weights=None)  # Initialize model without weights
+
+    # Synchronize all processes to ensure weights are downloaded and cached
+    dist.barrier()
+
+    # Move model to the correct device and wrap with DDP
     model.to(rank)
     model = setup_multi_gpu(model)
 
