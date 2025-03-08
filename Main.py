@@ -1,10 +1,10 @@
 import torch
 import torch.optim as optim
 from torchvision import models
-from train_log import setup_logger
-from checkpoint import save_checkpoint, load_checkpoint
-from multi_gpu import setup_distributed_training
-from data_loader import load_data
+from Training_logs import setup_logger
+from Model_CheckPoints import save_checkpoint, load_checkpoint
+from Multi_Gpu import setup_distributed_training
+from DataLoader_Augmentation import load_data
 import torch.distributed as dist
 import argparse
 import os
@@ -107,4 +107,4 @@ if __name__ == "__main__":
     main()
 
 # Run training with multi-GPU on Kaggle
-# torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20
+#torchrun --nproc_per_node=2 main.py --batch_size 64 --lr 3e-4 --epochs 20 --resume ./checkpoints/best_model.pth
